@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
     Hand, 
@@ -135,7 +136,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ t, provider, setProvid
                 if (galleryLocalUrls[file.key]) continue;
 
                 try {
-                    const blob = await fetchCloudBlob(file.url);
+                    const blob = await fetchCloudBlob(file.url as string);
                     if (!isCancelled) {
                         const url = URL.createObjectURL(blob);
                         setGalleryLocalUrls(prev => ({ ...prev, [file.key]: url }));
@@ -228,7 +229,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ t, provider, setProvid
         // Check if it's a data URL or blob URL (local), return as is
         if (url.startsWith('data:') || url.startsWith('blob:')) return url;
         
-        return `https://serveproxy.com/?url=${url}`;
+        return `https://peinture-proxy.9th.xyz/?url=${url}`;
     };
 
     // --- History Management ---
@@ -351,7 +352,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ t, provider, setProvid
         img.onerror = () => {
             console.error("Failed to load image via proxy:", url);
         };
-        img.src = getProxyUrl(url);
+        img.src = provider === 'gitee' || provider === 'modelscope' ? getProxyUrl(url) : url;
     };
 
     const handleHistorySelect = (historyItem: GeneratedImage) => {
@@ -685,7 +686,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ t, provider, setProvid
     };
 
     const urlToBlob = async (url: string): Promise<Blob> => {
-        const fetchUrl = getProxyUrl(url);
+        const fetchUrl = provider === 'gitee' || provider === 'modelscope' ? getProxyUrl(url) : url;
         const response = await fetch(fetchUrl);
         return await response.blob();
     };
@@ -768,9 +769,20 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ t, provider, setProvid
         setIsDownloading(true);
         let fileName = `edited_image_${Date.now()}`;
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        if (provider === 'gitee' || provider === 'modelscope') {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            if (isMobile) link.target = "_blank"
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
         try {
-            const fetchUrl = getProxyUrl(url); 
-            const response = await fetch(fetchUrl, { mode: 'cors' });
+            const fetchUrl = url; 
+            const response = await fetch(fetchUrl);
             if (!response.ok) throw new Error('Network response was not ok');
             let blob = await response.blob();
             if (blob.type.startsWith('image') && (blob.type === 'image/webp' || url.includes('.webp'))) {
@@ -879,7 +891,8 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ t, provider, setProvid
             if (isSourceNSFW) {
                 fileName += '.NSFW';
             }
-            fileName += '.png'; // explicit extension for safety, though upload service handles it too
+            const getExt = (url: string) => new URL(url).pathname.split('.').pop();
+            fileName += `.${getExt(generatedResult)}`
 
             await handleUploadToS3(blob, fileName, metadata);
         } catch (e) {
@@ -1521,7 +1534,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({ t, provider, setProvid
                                             className="group relative aspect-square rounded-xl overflow-hidden border border-white/10 hover:border-purple-500 transition-all hover:ring-4 hover:ring-purple-500/20 focus:outline-none"
                                         >
                                             <img 
-                                                src={getProxyUrl(img.url)} 
+                                                src={img.url} 
                                                 alt={img.prompt} 
                                                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                                 loading="lazy"
